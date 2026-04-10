@@ -5,8 +5,8 @@ Features:
   - Logout
 
 - Users
-  - Get all users (Pagination)
-  - Get user by id
-  - Update user
-  - Delete user
+  - Get all users (Pagination) /api/users
+  - Get user by id   /api/users/:userId"
+  - Update user     /api/update/:userId
+  - Delete user     /api/delete/:userId
 
