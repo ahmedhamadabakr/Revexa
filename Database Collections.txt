@@ -1,0 +1,9 @@
+Database Collections:
+- Users
+  - id
+  - firstname (string, required)
+  - lastname (string, required)
+  - email (string, required)
+  - password (string, required)
+  - gender (male or female, optional)
+  - address (string, optional)

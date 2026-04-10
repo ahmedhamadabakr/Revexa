@@ -1,0 +1,12 @@
+Features:
+- Authentication
+  - Register (Signup)
+  - Login (Signin)
+  - Logout
+
+- Users
+  - Get all users (Pagination)
+  - Get user by id
+  - Update user
+  - Delete user
+
