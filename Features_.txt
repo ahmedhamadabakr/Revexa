@@ -6,7 +6,7 @@ Features:
 
 - Users
   - Get all users (Pagination) /api/users
-  - Get user by id   /api/users/:userId"
+  - Get user by id   /api/users/:userId
   - Update user     /api/update/:userId
   - Delete user     /api/delete/:userId
 

@@ -5,19 +5,20 @@ const {
   updateUser,
   deleteUser,
 } = require("../controllers/users.controller");
+const mustBeLoggedIn = require("../middlewares/must-be-logged");
 
 const usersRouter = express.Router();
 
 // get all users
-usersRouter.get("/api/users", getAllUsers);
+usersRouter.get("/", getAllUsers);
 
 // get user by id
-usersRouter.get("/api/users/:userId", getUserById);
+usersRouter.get("/:userId", getUserById);
 
 // update user
-usersRouter.put("/api/update/:userId", updateUser);
+usersRouter.put("/:userId", mustBeLoggedIn, updateUser);
 
 // delete user
-usersRouter.delete("/api/delete/:userId", deleteUser);
+usersRouter.delete("/:userId", mustBeLoggedIn, deleteUser);
 
 module.exports = usersRouter;
