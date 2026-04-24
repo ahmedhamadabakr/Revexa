@@ -37,10 +37,19 @@ const userSchema = new mongoose.Schema({
     required: true,
     min: 18,
   },
+  role: {
+    type: String,
+    enum: ["user", "company", "admin"],
+    default: "user",
+  },
   address: {
     type: String,
     minlength: 3,
     maxlength: 500,
+  },
+  refreshToken: {
+    type: String,
+    default: null,
   },
   created_at: {
     type: Date,

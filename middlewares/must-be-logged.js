@@ -15,12 +15,8 @@ function mustBeLoggedIn(req, res, next) {
   const token = authHeader.split(" ")[1];
 
   try {
-    /*
-    const paylod = jwt.verify(req.cookies.token, jwtConfing.secret);
-    req.user = paylod;
-     */
     const payload = jwt.verify(token, jwtConfig.secret);
-    req.user = payload;
+    req.user = payload; // الآن يحتوي على id, email, role
     next();
   } catch (error) {
     return res.status(401).json({

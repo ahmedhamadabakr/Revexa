@@ -34,9 +34,13 @@ app.use(async (req, res, next) => {
 // Routes
 const authenticationRouter = require("./routes/authentication.routes");
 const usersRouter = require("./routes/users.routes");
+const productRouter = require("./routes/products.routes");
+const categoryRouter = require("./routes/category.routes");
 
 app.use("/api/auth", authenticationRouter); 
-app.use("/api/users", usersRouter);      
+app.use("/api/users", usersRouter);
+app.use(productRouter);
+app.use("/api/categories", categoryRouter);
 
 app.get("/", (req, res) => {
   res.send("Welcome to Revexa API");

@@ -1,13 +1,16 @@
 const User = require("../models/user.model");
 
 async function isAdmin(req, res, next) {
+  try {
+    const user = await User.findById(req.user.id);
 
-  const user = await User.findOne();
-
-  if (user.role === "admin") {
-    next();
-  } else {
-    res.status(403).send("You are not admin");
+    if (user && user.role === "admin") {
+      next();
+    } else {
+      res.status(403).json({ message: "Access denied. Admin only." });
+    }
+  } catch (error) {
+    res.status(500).json({ message: "Server error in admin check" });
   }
 }
 

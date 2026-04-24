@@ -23,12 +23,13 @@ const register = async (req, res) => {
       gender: data.gender,
       address: data.address,
       age: data.age,
+      role: data.role || "user",
       phone: data.phone,
     });
 
-    // Generate token
+    // Generate token with role
     const token = jwt.sign(
-      { id: user._id, email: user.email },
+      { id: user._id, email: user.email, role: user.role },
       jwtConfig.secret,
       { expiresIn: "7d" }
     );
@@ -79,14 +80,16 @@ const login = async (req, res) => {
       });
     }
 
+    // نحتفظ بـ Access Token في الـ Payload لسهولة الوصول للـ Role في الـ Middleware
     const token = jwt.sign(
-      { id: user._id, email: user.email },
+      { id: user._id, email: user.email, role: user.role },
       jwtConfig.secret,
       { expiresIn: "7d" }
     );
-    console.log("Token generated successfully");
 
-    res.cookie("token", token, { httpOnly: true, secure: false });
+    // تحديث التوكن في قاعدة البيانات (اختياري للـ Refresh Token logic)
+    user.refreshToken = token; 
+    await user.save();
 
     res.json({
       message: "Login successful",
@@ -109,9 +112,11 @@ const login = async (req, res) => {
   }
 };
 
-const logout = (req, res) => {
+const logout = async (req, res) => {
   try {
-    res.clearCookie("token");
+    // مسح التوكن من قاعدة البيانات عند تسجيل الخروج
+    await User.findByIdAndUpdate(req.user.id, { refreshToken: null });
+    
     res.json({
       message: "User logged out successfully",
       data: true,
