@@ -1,18 +1,25 @@
 const admin = require('firebase-admin');
-const dotenv = require('dotenv');
-
-dotenv.config();
 
 let serviceAccount;
 try {
-  if (process.env.FIREBASE_SERVICE_ACCOUNT) {
-    // نقوم بمحاولة قراءة المفتاح من متغيرات البيئة
-    serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+  let saConfig = process.env.FIREBASE_SERVICE_ACCOUNT;
+  if (saConfig) {
+    // إزالة علامات الاقتباس الزائدة إذا وجدت في بداية ونهاية النص
+    saConfig = saConfig.trim();
+    if ((saConfig.startsWith("'") && saConfig.endsWith("'")) || (saConfig.startsWith('"') && saConfig.endsWith('"'))) {
+      saConfig = saConfig.slice(1, -1);
+    }
+    serviceAccount = JSON.parse(saConfig);
   } else {
     serviceAccount = null;
   }
 } catch (error) {
-  console.error("خطأ: لم يتم العثور على FIREBASE_SERVICE_ACCOUNT أو التنسيق غير صحيح.");
+  console.error("Firebase Config Error (JSON Parsing):", error.message);
+  if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+    // تنبيه المستخدم إذا كان النص يحتوي على علامات اقتباس مفردة بدلاً من المزدوجة
+    const hasSingleQuotes = process.env.FIREBASE_SERVICE_ACCOUNT.includes("'");
+    if (hasSingleQuotes) console.error("تنبيه: يبدو أن النص يحتوي على علامات اقتباس مفردة ('). JSON يتطلب علامات مزدوجة (\").");
+  }
   serviceAccount = null;
 }
 

@@ -1,6 +1,8 @@
+const dotenv = require('dotenv');
+dotenv.config();
+
 const express = require('express');
 const mongoose = require('mongoose');
-const dotenv = require('dotenv');
 const notificationRoutes = require('./routes/notificationRoutes');
 const authenticationRouter = require('./routes/authentication.routes');
 const usersRouter = require('./routes/users.routes');
@@ -8,12 +10,17 @@ const productRouter = require('./routes/products.routes');
 const categoryRouter = require('./routes/category.routes');
 const orederRouter = require('./routes/order.routes');
 
-dotenv.config();
 const app = express();
 app.use(express.json());
 
 // Database Connection
-mongoose.connect(process.env.MONGO_URI)
+const dbUri = process.env.MONGODB_URI || process.env.MONGO_URI;
+if (!dbUri) {
+  console.error('خطأ حرِج: لم يتم العثور على MONGODB_URI أو MONGO_URI في ملف .env');
+  process.exit(1);
+}
+
+mongoose.connect(dbUri)
   .then(() => console.log('Connected to MongoDB'))
   .catch(err => console.error('DB Connection Error:', err));
 
