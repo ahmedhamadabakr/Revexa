@@ -16,7 +16,7 @@ app.use(express.json());
 // Database Connection
 const dbUri = process.env.MONGODB_URI || process.env.MONGO_URI;
 if (!dbUri) {
-  console.error('خطأ حرِج: لم يتم العثور على MONGODB_URI أو MONGO_URI في ملف .env');
+  console.error('Critical Error: MONGODB_URI or MONGO_URI not found in .env file');
   process.exit(1);
 }
 
@@ -28,9 +28,9 @@ mongoose.connect(dbUri)
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/auth', authenticationRouter);
 app.use('/api/users', usersRouter);
-app.use('/', productRouter); // يحتوي بالفعل على /api/products داخل ملفه
+app.use('/', productRouter); // Already contains /api/products within its file
 app.use('/api/categories', categoryRouter);
-app.use('/', orederRouter); // يحتوي بالفعل على /api/orders داخل ملفه
+app.use('/', orederRouter); // Already contains /api/orders within its file
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {

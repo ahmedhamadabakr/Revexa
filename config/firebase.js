@@ -4,7 +4,7 @@ let serviceAccount;
 try {
   let saConfig = process.env.FIREBASE_SERVICE_ACCOUNT;
   if (saConfig) {
-    // إزالة علامات الاقتباس الزائدة إذا وجدت في بداية ونهاية النص
+    // Remove extra quotes if found at the start and end of the text
     saConfig = saConfig.trim();
     if ((saConfig.startsWith("'") && saConfig.endsWith("'")) || (saConfig.startsWith('"') && saConfig.endsWith('"'))) {
       saConfig = saConfig.slice(1, -1);
@@ -16,9 +16,9 @@ try {
 } catch (error) {
   console.error("Firebase Config Error (JSON Parsing):", error.message);
   if (process.env.FIREBASE_SERVICE_ACCOUNT) {
-    // تنبيه المستخدم إذا كان النص يحتوي على علامات اقتباس مفردة بدلاً من المزدوجة
+    // Warn the user if the text contains single quotes instead of double quotes
     const hasSingleQuotes = process.env.FIREBASE_SERVICE_ACCOUNT.includes("'");
-    if (hasSingleQuotes) console.error("تنبيه: يبدو أن النص يحتوي على علامات اقتباس مفردة ('). JSON يتطلب علامات مزدوجة (\").");
+    if (hasSingleQuotes) console.error("Warning: The text seems to contain single quotes ('). JSON requires double quotes (\").");
   }
   serviceAccount = null;
 }
@@ -29,7 +29,7 @@ if (serviceAccount) {
   });
   console.log("Firebase Admin SDK initialized successfully.");
 } else {
-  console.warn("تحذير: لم يتم تفعيل Firebase Admin SDK بسبب فقدان الإعدادات.");
+  console.warn("Warning: Firebase Admin SDK not activated due to missing settings.");
 }
 
 const sendPushNotification = async (token, title, body, data = {}) => {

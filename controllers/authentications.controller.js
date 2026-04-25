@@ -83,7 +83,7 @@ const login = async (req, res) => {
       });
     }
 
-    // نحتفظ بـ Access Token في الـ Payload لسهولة الوصول للـ Role في الـ Middleware
+    // Keep Access Token in the Payload for easy access to the Role in the Middleware
     const token = jwt.sign(
       { id: user._id, email: user.email, role: user.role },
       jwtConfig.secret,
@@ -92,7 +92,7 @@ const login = async (req, res) => {
 
     user.refreshToken = token;
 
-    // تخزين FCM Token باحترافية: مسحه من أي مستخدم آخر أولاً لمنع تداخل الإشعارات
+    // Store FCM Token professionally: clear it from any other user first to prevent notification overlap
     if (data.fcmToken) {
       await User.updateMany({ fcmToken: data.fcmToken }, { $set: { fcmToken: null } });
       user.fcmToken = data.fcmToken;
@@ -123,8 +123,8 @@ const login = async (req, res) => {
 
 const logout = async (req, res) => {
   try {
-    // مسح التوكن من قاعدة البيانات عند تسجيل الخروج
-    // احترافياً: نمسح الـ fcmToken أيضاً لمنع وصول إشعارات لمستخدم خرج من حسابه
+    // Clear token from the database on logout
+    // Professionally: we clear fcmToken as well to prevent notifications from reaching a logged-out user
     await User.findByIdAndUpdate(req.user.id, { refreshToken: null, fcmToken: null });
     
     res.json({
@@ -142,7 +142,7 @@ const logout = async (req, res) => {
 
 const forgotPassword = async (req, res) => {
   try {
-    // التحقق من صحة الإيميل باستخدام Zod
+    // Validate email using Zod
     const emailSchema = z.object({ email: z.string().email() });
     const { email } = emailSchema.parse(req.body);
 
@@ -165,8 +165,8 @@ const forgotPassword = async (req, res) => {
     const transporter = nodemailer.createTransport({
       service: "Gmail",
       auth: {
-        user: process.env.EMAIL_USER, // إيميلك
-        pass: process.env.EMAIL_PASS, // كود الـ App Password
+        user: process.env.EMAIL_USER, // Your email
+        pass: process.env.EMAIL_PASS, // App Password code
       },
     });
 
@@ -190,7 +190,7 @@ const forgotPassword = async (req, res) => {
 
 const resetPassword = async (req, res) => {
   try {
-    // التحقق من صحة كلمة المرور الجديدة
+    // Validate the new password
     const passSchema = z.object({ 
       password: z.string().min(6, "Password must be at least 6 characters") 
     });

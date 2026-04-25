@@ -1,11 +1,11 @@
 const Notification = require('../models/Notification');
-const User = require('../models/user.model'); // تأكد من المسار الصحيح لموديل المستخدم
+const User = require('../models/user.model'); // Ensure the correct path for the user model
 const { sendPushNotification, admin } = require('../config/firebase');
 const { z } = require('zod');
 
 const notificationSchema = z.object({
   userId: z.string(),
-  fcmToken: z.string().optional(), // اختياري، لو لم يرسل سنجلبه من الـ DB
+  fcmToken: z.string().optional(), // Optional, if not sent we will fetch it from the DB
   title: z.string().min(1),
   body: z.string().min(1),
   data: z.record(z.string()).optional(),
@@ -16,11 +16,11 @@ const sendToUser = async (req, res) => {
     const validatedData = notificationSchema.parse(req.body);
     let { userId, fcmToken, title, body, data } = validatedData;
 
-    // إذا لم يتم إرسال التوكن، نبحث عنه في قاعدة البيانات
+    // If the token is not sent, we look for it in the database
     if (!fcmToken) {
       const user = await User.findById(userId);
       if (!user || !user.fcmToken) {
-        return res.status(404).json({ error: 'المستخدم ليس لديه توكن مسجل (FCM Token)' });
+        return res.status(404).json({ error: 'User does not have a registered FCM Token' });
       }
       fcmToken = user.fcmToken;
     }

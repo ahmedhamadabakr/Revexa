@@ -119,7 +119,7 @@ const deleteUser = async (req, res) => {
 const updateFcmToken = async (req, res) => {
   try {
     const { fcmToken } = req.body;
-    const userId = req.user.id; // مأخوذ من الـ Middleware (mustBeLoggedIn)
+    const userId = req.user.id; // Taken from Middleware (mustBeLoggedIn)
 
     if (!fcmToken) {
       return res.status(400).json({ message: "FCM Token is required" });
