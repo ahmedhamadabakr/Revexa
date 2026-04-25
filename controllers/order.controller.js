@@ -1,6 +1,8 @@
 const Order = require("../models/orders.models");
 const Product = require("../models/Products.model");
+const User = require("../models/user.model");
 const { orderSchema } = require("../requests/orders/order.Schema");
+const { sendPushNotification } = require("../config/firebase");
 
 /**
  * @desc Create a new order for a product
@@ -120,13 +122,26 @@ const updateOrder = async (req, res) => {
       { _id: orderId, user: req.user.id },
       { status },
       { new: true }
-    );
+    ).populate("user");
 
     if (!updatedOrder) {
       return res.status(404).json({
         message: "Order not found",
         data: null,
       });
+    }
+
+    // إرسال إشعار تلقائي للمستخدم عند تغيير حالة الطلب
+    if (updatedOrder.user && updatedOrder.user.fcmToken) {
+      try {
+        await sendPushNotification(
+          updatedOrder.user.fcmToken,
+          "تحديث الطلب",
+          `تم تغيير حالة طلبك إلى: ${status}`
+        );
+      } catch (err) {
+        console.error("Failed to send status notification:", err);
+      }
     }
 
     return res.status(200).json({

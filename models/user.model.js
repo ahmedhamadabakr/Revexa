@@ -13,6 +13,16 @@ const userSchema = new mongoose.Schema({
     minlength: 2,
     maxlength: 50,
   },
+  username: {
+    type: String,
+    unique: true,
+    minlength: 3,
+    maxlength: 50,
+  },
+  fcmToken: {
+    type: String,
+    default: null,
+  },
   email: {
     type: String,
     required: true,
@@ -51,6 +61,8 @@ const userSchema = new mongoose.Schema({
     type: String,
     default: null,
   },
+  passwordResetToken: String,
+  passwordResetExpires: Date,
   created_at: {
     type: Date,
     default: Date.now,

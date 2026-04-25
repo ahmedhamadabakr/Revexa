@@ -4,6 +4,7 @@ const {
   getUserById,
   updateUser,
   deleteUser,
+  updateFcmToken,
 } = require("../controllers/users.controller");
 const mustBeLoggedIn = require("../middlewares/must-be-logged");
 
@@ -20,5 +21,8 @@ usersRouter.put("/:userId", mustBeLoggedIn, updateUser);
 
 // delete user
 usersRouter.delete("/:userId", mustBeLoggedIn, deleteUser);
+
+// update FCM Token
+usersRouter.post("/fcm-token", mustBeLoggedIn, updateFcmToken);
 
 module.exports = usersRouter;

@@ -116,9 +116,33 @@ const deleteUser = async (req, res) => {
   }
 };
 
+const updateFcmToken = async (req, res) => {
+  try {
+    const { fcmToken } = req.body;
+    const userId = req.user.id; // مأخوذ من الـ Middleware (mustBeLoggedIn)
+
+    if (!fcmToken) {
+      return res.status(400).json({ message: "FCM Token is required" });
+    }
+
+    // ضمان عدم تكرار التوكن مع مستخدم آخر
+    await User.updateMany({ fcmToken: fcmToken }, { $set: { fcmToken: null } });
+
+    await User.findByIdAndUpdate(userId, { fcmToken });
+
+    res.status(200).json({
+      message: "FCM Token updated successfully",
+      status: "success",
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 module.exports = {
   getAllUsers,
   getUserById,
   updateUser,
   deleteUser,
+  updateFcmToken,
 };

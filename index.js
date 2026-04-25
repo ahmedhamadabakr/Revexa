@@ -1,60 +1,33 @@
-require("dotenv").config(); 
-const express = require("express");
-const morgan = require("morgan");
-const errorhandler = require("errorhandler");
-const mongoose = require("mongoose");
+const express = require('express');
+const mongoose = require('mongoose');
+const dotenv = require('dotenv');
+const notificationRoutes = require('./routes/notificationRoutes');
+const authenticationRouter = require('./routes/authentication.routes');
+const usersRouter = require('./routes/users.routes');
+const productRouter = require('./routes/products.routes');
+const categoryRouter = require('./routes/category.routes');
+const orederRouter = require('./routes/order.routes');
 
+dotenv.config();
 const app = express();
-const port = process.env.PORT || 3000; 
-
-// 1. إنشاء دالة للاتصال بقاعدة البيانات (Singleton Pattern)
-let isConnected = false;
-const connectDB = async () => {
-  if (isConnected) return;
-  try {
-    await mongoose.connect(process.env.MONGODB_URI);
-    isConnected = true;
-    console.log("✅ Connected to MongoDB");
-  } catch (error) {
-    console.error("❌ DB Connection Error:", error.message);
-  }
-};
-
-// Middleware
-app.use(morgan("dev"));
 app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
 
-// 2. Middleware للاتصال بالقاعدة قبل معالجة أي طلب (مهم لـ Vercel)
-app.use(async (req, res, next) => {
-  await connectDB();
-  next();
-});
+// Database Connection
+mongoose.connect(process.env.MONGO_URI)
+  .then(() => console.log('Connected to MongoDB'))
+  .catch(err => console.error('DB Connection Error:', err));
 
 // Routes
-const authenticationRouter = require("./routes/authentication.routes");
-const usersRouter = require("./routes/users.routes");
-const productRouter = require("./routes/products.routes");
-const categoryRouter = require("./routes/category.routes");
+app.use('/api/notifications', notificationRoutes);
+app.use('/api/auth', authenticationRouter);
+app.use('/api/users', usersRouter);
+app.use('/', productRouter); // يحتوي بالفعل على /api/products داخل ملفه
+app.use('/api/categories', categoryRouter);
+app.use('/', orederRouter); // يحتوي بالفعل على /api/orders داخل ملفه
 
-app.use("/api/auth", authenticationRouter); 
-app.use("/api/users", usersRouter);
-app.use(productRouter);
-app.use("/api/categories", categoryRouter);
-
-app.get("/", (req, res) => {
-  res.send("Welcome to Revexa API");
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
 });
-
-if (process.env.NODE_ENV === 'development') {
-  app.use(errorhandler());
-}
-
-// 3. تشغيل السيرفر محلياً فقط (Local Development)
-if (process.env.NODE_ENV !== 'production') {
-  app.listen(port, () => {
-    console.log(` Server running locally on: http://localhost:${port}`);
-  });
-}
 
 module.exports = app;

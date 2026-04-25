@@ -1,6 +1,9 @@
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const jwtConfig = require("../config/jwt");
+const crypto = require("crypto");
+const nodemailer = require("nodemailer");
+const { z } = require("zod");
 
 const {
   registerSchema,
@@ -87,8 +90,14 @@ const login = async (req, res) => {
       { expiresIn: "7d" }
     );
 
-    // تحديث التوكن في قاعدة البيانات (اختياري للـ Refresh Token logic)
-    user.refreshToken = token; 
+    user.refreshToken = token;
+
+    // تخزين FCM Token باحترافية: مسحه من أي مستخدم آخر أولاً لمنع تداخل الإشعارات
+    if (data.fcmToken) {
+      await User.updateMany({ fcmToken: data.fcmToken }, { $set: { fcmToken: null } });
+      user.fcmToken = data.fcmToken;
+    }
+
     await user.save();
 
     res.json({
@@ -115,7 +124,8 @@ const login = async (req, res) => {
 const logout = async (req, res) => {
   try {
     // مسح التوكن من قاعدة البيانات عند تسجيل الخروج
-    await User.findByIdAndUpdate(req.user.id, { refreshToken: null });
+    // احترافياً: نمسح الـ fcmToken أيضاً لمنع وصول إشعارات لمستخدم خرج من حسابه
+    await User.findByIdAndUpdate(req.user.id, { refreshToken: null, fcmToken: null });
     
     res.json({
       message: "User logged out successfully",
@@ -130,8 +140,102 @@ const logout = async (req, res) => {
   }
 };
 
+const forgotPassword = async (req, res) => {
+  try {
+    // التحقق من صحة الإيميل باستخدام Zod
+    const emailSchema = z.object({ email: z.string().email() });
+    const { email } = emailSchema.parse(req.body);
+
+    const user = await User.findOne({ email });
+
+    if (!user) {
+      return res.status(404).json({ message: "No user found with that email" });
+    }
+
+    // 1. Generate random reset token
+    const resetToken = crypto.randomBytes(32).toString("hex");
+
+    // 2. Hash it and save to DB (for security)
+    user.passwordResetToken = crypto.createHash("sha256").update(resetToken).digest("hex");
+    user.passwordResetExpires = Date.now() + 10 * 60 * 1000; // valid for 10 minutes
+
+    await user.save({ validateBeforeSave: false });
+
+    // 3. Send via email
+    const transporter = nodemailer.createTransport({
+      service: "Gmail",
+      auth: {
+        user: process.env.EMAIL_USER, // إيميلك
+        pass: process.env.EMAIL_PASS, // كود الـ App Password
+      },
+    });
+
+    const resetURL = `${req.protocol}://${req.get("host")}/api/auth/reset-password/${resetToken}`;
+    
+    const mailOptions = {
+      from: "Revexa Support <support@revexa.com>",
+      to: user.email,
+      subject: "Password Reset Request",
+      text: `Your reset token is: ${resetToken}\nOr use this link: ${resetURL}`,
+    };
+
+    await transporter.sendMail(mailOptions);
+
+    res.json({ message: "Token sent to email!" });
+  } catch (error) {
+    if (error instanceof z.ZodError) return res.status(400).json({ errors: error.errors });
+    res.status(500).json({ message: error.message });
+  }
+};
+
+const resetPassword = async (req, res) => {
+  try {
+    // التحقق من صحة كلمة المرور الجديدة
+    const passSchema = z.object({ 
+      password: z.string().min(6, "Password must be at least 6 characters") 
+    });
+    const { password } = passSchema.parse(req.body);
+
+    // 1. Get user based on the hashed token
+    const hashedToken = crypto.createHash("sha256").update(req.params.token).digest("hex");
+
+    const user = await User.findOne({
+      passwordResetToken: hashedToken,
+      passwordResetExpires: { $gt: Date.now() },
+    });
+
+    if (!user) {
+      return res.status(400).json({ message: "Token is invalid or has expired" });
+    }
+
+    // 2. Set new password and hash it
+    user.password = await bcrypt.hash(password, saltRounds);
+    user.passwordResetToken = undefined;
+    user.passwordResetExpires = undefined;
+
+    await user.save();
+
+    // 3. Log user in (generate token)
+    const token = jwt.sign(
+      { id: user._id, email: user.email, role: user.role },
+      jwtConfig.secret,
+      { expiresIn: "7d" }
+    );
+
+    res.status(200).json({
+      message: "Password reset successful",
+      token
+    });
+  } catch (error) {
+    if (error instanceof z.ZodError) return res.status(400).json({ errors: error.errors });
+    res.status(500).json({ message: error.message });
+  }
+};
+
 module.exports = {
   register,
   login,
   logout,
+  forgotPassword,
+  resetPassword,
 };
