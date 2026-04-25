@@ -4,16 +4,13 @@ const Product = require("../models/Products.model");
 
 const getAllProducts = async (req, res) => {
   try {
-    const { page = 1, limit = 10 } = req.query;
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 10));
+
     const products = await Product.find()
       .populate("category", "name")
       .skip((page - 1) * limit)
-      .limit(parseInt(limit));
-
-    if (!products) {
-      res.status(404).send("No products found");
-      return;
-    }
+      .limit(limit);
 
     const totalProducts = await Product.countDocuments();
     const totalPages = Math.ceil(totalProducts / limit);
@@ -21,25 +18,24 @@ const getAllProducts = async (req, res) => {
     res.json({
       message: "Products retrieved successfully",
       data: products.map((product) => ({
+        id: product._id,
         title: product.title,
         description: product.description,
         images: product.images,
         price: product.price,
         category: product.category?.name,
         companyId: product.companyId,
+        location: product.location,
       })),
       pagination: {
         totalProducts,
         totalPages,
-        currentPage: parseInt(page),
-        pageSize: parseInt(limit),
+        currentPage: page,
+        pageSize: limit,
       },
     });
   } catch (error) {
-    res.status(500).json({
-      message: error.message,
-      data: false,
-    });
+    res.status(500).json({ message: error.message, data: false });
   }
 };
 
@@ -48,34 +44,48 @@ const getProductById = async (req, res) => {
     const id = req.params.productId;
     productIdschema.parse({ productId: id });
 
-    const isProduct = await Product.findById(id).populate("category", "name");
-    console.log(isProduct);
+    const product = await Product.findById(id).populate("category", "name");
 
-    if (!isProduct) {
-      res.status(404).send("User not found");
-      return;
+    if (!product) {
+      return res.status(404).json({ message: "Product not found", data: null });
     }
 
     res.status(200).json({
-      message: "User found",
+      message: "Product found",
       status: "success",
       data: {
-        title: isProduct.title,
-        description: isProduct.description,
-        images: isProduct.images,
-        category: isProduct.category?.name,
-        price: isProduct.price,
+        id: product._id,
+        title: product.title,
+        description: product.description,
+        images: product.images,
+        category: product.category?.name,
+        price: product.price,
+        location: product.location,
+        companyId: product.companyId,
       },
     });
   } catch (error) {
-    res.status(400).send(error.message);
+    res.status(400).json({ message: error.message, data: null });
   }
 };
 
 const createProduct = async (req, res) => {
   try {
-    const data = productsSchema.parse(req.body);
-    // يتم أخذ الـ companyId من المستخدم المسجل حالياً (يجب أن يكون Role الخاص به Company)
+    // Images come from Cloudinary via multer (req.files), not req.body
+    const images = req.files
+      ? req.files.map((file) => ({
+          url: file.path,
+          public_id: file.filename,
+        }))
+      : [];
+
+    const bodyData = {
+      ...req.body,
+      price: parseFloat(req.body.price),
+      images,
+    };
+
+    const data = productsSchema.parse(bodyData);
 
     const newProduct = await Product.create({
       title: data.title,
@@ -84,7 +94,7 @@ const createProduct = async (req, res) => {
       category: data.category,
       images: data.images,
       companyId: req.user.id,
-      location: data.location
+      location: data.location,
     });
 
     res.status(201).json({
@@ -92,11 +102,7 @@ const createProduct = async (req, res) => {
       data: newProduct,
     });
   } catch (error) {
-    res.status(400).json({
-      message: "Validation error",
-      error: error.message,
-      data: false,
-    });
+    res.status(400).json({ message: "Validation error", error: error.message, data: false });
   }
 };
 
@@ -104,54 +110,61 @@ const updateProduct = async (req, res) => {
   try {
     const id = req.params.productId;
     productIdschema.parse({ productId: id });
-    const data = req.body;
-    productsSchema.parse(data);
-    const cheackproduct = await Product.findById(id);
-    if (!cheackproduct) {
-      res.status(404).send("Product not found");
-      return;
+
+    const existingProduct = await Product.findById(id);
+    if (!existingProduct) {
+      return res.status(404).json({ message: "Product not found", data: null });
     }
-    await Product.updateOne({ _id: id }, { $set: { ...req.body } });
-    const product = await Product.findById(id);
+
+    // Ownership check: only the company that created it can update
+    if (existingProduct.companyId.toString() !== req.user.id) {
+      return res.status(403).json({ message: "Access denied. You don't own this product.", data: null });
+    }
+
+    // Partial update — only validate provided fields
+    const partialSchema = productsSchema.partial();
+    const data = partialSchema.parse(req.body);
+
+    const updated = await Product.findByIdAndUpdate(id, { $set: data }, { new: true });
 
     res.status(200).json({
       message: "Product updated",
       status: "success",
       data: {
-        title: product.title,
-        description: product.description,
-        price: product.price,
-        category: product.category,
-        images: product.images,
+        id: updated._id,
+        title: updated.title,
+        description: updated.description,
+        price: updated.price,
+        category: updated.category,
+        images: updated.images,
+        location: updated.location,
       },
     });
   } catch (error) {
-    res.status(400).send(error.message);
+    res.status(400).json({ message: error.message, data: null });
   }
 };
 
 const deleteProduct = async (req, res) => {
   try {
     const id = req.params.productId;
-    productIdschema.parse({ productId: id }); //validate the id
+    productIdschema.parse({ productId: id });
 
-    const user = await Product.findById(id); //find the user by id
-    if (!user) {
-      res.status(404).send("product not found");
-      return;
+    const product = await Product.findById(id);
+    if (!product) {
+      return res.status(404).json({ message: "Product not found", data: null });
     }
 
-    await Product.deleteOne({ _id: id });
-    res.send("delete product");
+    // Ownership check: only the company that created it (or admin) can delete
+    if (product.companyId.toString() !== req.user.id && req.user.role !== "admin") {
+      return res.status(403).json({ message: "Access denied. You don't own this product.", data: null });
+    }
+
+    await product.deleteOne();
+    res.status(200).json({ message: "Product deleted successfully", data: true });
   } catch (error) {
-    res.status(400).send(error.message);
+    res.status(400).json({ message: error.message, data: null });
   }
 };
 
-module.exports = {
-  getAllProducts,
-  getProductById,
-  createProduct,
-  updateProduct,
-  deleteProduct,
-};
+module.exports = { getAllProducts, getProductById, createProduct, updateProduct, deleteProduct };

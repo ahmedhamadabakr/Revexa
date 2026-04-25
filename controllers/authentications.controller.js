@@ -5,17 +5,14 @@ const crypto = require("crypto");
 const nodemailer = require("nodemailer");
 const { z } = require("zod");
 
-const {
-  registerSchema,
-} = require("../requests/authentication/regester.Schema");
+const { registerSchema } = require("../requests/authentication/regester.Schema");
 const { loginSchema } = require("../requests/authentication/login.Schema");
 const User = require("../models/user.model");
 const saltRounds = 10;
 
 const register = async (req, res) => {
   try {
-    const data = req.body;
-    registerSchema.parse(data); // validate the request body
+    const data = registerSchema.parse(req.body);
     const hashPassword = await bcrypt.hash(data.password, saltRounds);
 
     const user = await User.create({
@@ -26,11 +23,10 @@ const register = async (req, res) => {
       gender: data.gender,
       address: data.address,
       age: data.age,
-      role: data.role || "user",
       phone: data.phone,
+      role: "user", // role is always "user" on registration — never trust client
     });
 
-    // Generate token with role
     const token = jwt.sign(
       { id: user._id, email: user.email, role: user.role },
       jwtConfig.secret,
@@ -50,40 +46,31 @@ const register = async (req, res) => {
       },
     });
   } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ message: "Validation error", errors: error.errors });
+    }
     res.status(500).json({
       message: error.message,
-      errors: error.errors || error.errorResponse?.errmsg,
+      errors: error.errorResponse?.errmsg,
     });
   }
 };
 
 const login = async (req, res) => {
   try {
-    const data = req.body;
-    console.log("Login attempt with data:", { email: data.email });
-
-    loginSchema.parse(data);
+    const data = loginSchema.parse(req.body);
 
     const user = await User.findOne({ email: data.email });
-    console.log("User found:", user ? "Yes" : "No");
 
     if (!user) {
-      return res.status(400).json({
-        message: "Invalid email or password",
-        data: false,
-      });
+      return res.status(400).json({ message: "Invalid email or password", data: false });
     }
 
     const passwordMatch = await bcrypt.compare(data.password, user.password);
-
     if (!passwordMatch) {
-      return res.status(400).json({
-        message: "Invalid email or password",
-        data: false,
-      });
+      return res.status(400).json({ message: "Invalid email or password", data: false });
     }
 
-    // Keep Access Token in the Payload for easy access to the Role in the Middleware
     const token = jwt.sign(
       { id: user._id, email: user.email, role: user.role },
       jwtConfig.secret,
@@ -92,9 +79,9 @@ const login = async (req, res) => {
 
     user.refreshToken = token;
 
-    // Store FCM Token professionally: clear it from any other user first to prevent notification overlap
+    // Clear FCM token from any other user to prevent notification overlap
     if (data.fcmToken) {
-      await User.updateMany({ fcmToken: data.fcmToken }, { $set: { fcmToken: null } });
+      await User.updateMany({ fcmToken: data.fcmToken, _id: { $ne: user._id } }, { $set: { fcmToken: null } });
       user.fcmToken = data.fcmToken;
     }
 
@@ -109,79 +96,60 @@ const login = async (req, res) => {
           firstName: user.firstName,
           lastName: user.lastName,
           email: user.email,
+          role: user.role,
         },
       },
     });
   } catch (error) {
-    console.error("Login error:", error);
-    res.status(500).json({
-      message: error.message,
-      errors: error.errors,
-    });
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ message: "Validation error", errors: error.errors });
+    }
+    res.status(500).json({ message: error.message });
   }
 };
 
 const logout = async (req, res) => {
   try {
-    // Clear token from the database on logout
-    // Professionally: we clear fcmToken as well to prevent notifications from reaching a logged-out user
     await User.findByIdAndUpdate(req.user.id, { refreshToken: null, fcmToken: null });
-    
-    res.json({
-      message: "User logged out successfully",
-      data: true,
-    });
+    res.json({ message: "User logged out successfully", data: true });
   } catch (error) {
-    res.status(500).json({
-      message: error.message,
-      errors: error.errors,
-    });
-    console.log(error);
+    res.status(500).json({ message: error.message });
   }
 };
 
 const forgotPassword = async (req, res) => {
   try {
-    // Validate email using Zod
     const emailSchema = z.object({ email: z.string().email() });
     const { email } = emailSchema.parse(req.body);
 
     const user = await User.findOne({ email });
-
     if (!user) {
       return res.status(404).json({ message: "No user found with that email" });
     }
 
-    // 1. Generate random reset token
     const resetToken = crypto.randomBytes(32).toString("hex");
-
-    // 2. Hash it and save to DB (for security)
     user.passwordResetToken = crypto.createHash("sha256").update(resetToken).digest("hex");
-    user.passwordResetExpires = Date.now() + 10 * 60 * 1000; // valid for 10 minutes
-
+    user.passwordResetExpires = Date.now() + 10 * 60 * 1000; // 10 minutes
     await user.save({ validateBeforeSave: false });
 
-    // 3. Send via email
     const transporter = nodemailer.createTransport({
       service: "Gmail",
       auth: {
-        user: process.env.EMAIL_USER, // Your email
-        pass: process.env.EMAIL_PASS, // App Password code
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS,
       },
     });
 
     const resetURL = `${req.protocol}://${req.get("host")}/api/auth/reset-password/${resetToken}`;
-    
-    const mailOptions = {
+
+    await transporter.sendMail({
       from: "Revexa Support <support@revexa.com>",
       to: user.email,
       subject: "Password Reset Request",
-      text: `Your reset token is: ${resetToken}\nOr use this link: ${resetURL}`,
-    };
+      text: `Use this link to reset your password (valid for 10 minutes):\n\n${resetURL}`,
+    });
 
-    await transporter.sendMail(mailOptions);
-
-    res.json({ message: "Token sent to email!" });
+    res.json({ message: "Password reset link sent to email" });
   } catch (error) {
     if (error instanceof z.ZodError) return res.status(400).json({ errors: error.errors });
     res.status(500).json({ message: error.message });
@@ -190,13 +158,11 @@ const forgotPassword = async (req, res) => {
 
 const resetPassword = async (req, res) => {
   try {
-    // Validate the new password
-    const passSchema = z.object({ 
-      password: z.string().min(6, "Password must be at least 6 characters") 
+    const passSchema = z.object({
+      password: z.string().min(6, "Password must be at least 6 characters"),
     });
     const { password } = passSchema.parse(req.body);
 
-    // 1. Get user based on the hashed token
     const hashedToken = crypto.createHash("sha256").update(req.params.token).digest("hex");
 
     const user = await User.findOne({
@@ -208,34 +174,22 @@ const resetPassword = async (req, res) => {
       return res.status(400).json({ message: "Token is invalid or has expired" });
     }
 
-    // 2. Set new password and hash it
     user.password = await bcrypt.hash(password, saltRounds);
     user.passwordResetToken = undefined;
     user.passwordResetExpires = undefined;
-
     await user.save();
 
-    // 3. Log user in (generate token)
     const token = jwt.sign(
       { id: user._id, email: user.email, role: user.role },
       jwtConfig.secret,
       { expiresIn: "7d" }
     );
 
-    res.status(200).json({
-      message: "Password reset successful",
-      token
-    });
+    res.status(200).json({ message: "Password reset successful", token });
   } catch (error) {
     if (error instanceof z.ZodError) return res.status(400).json({ errors: error.errors });
     res.status(500).json({ message: error.message });
   }
 };
 
-module.exports = {
-  register,
-  login,
-  logout,
-  forgotPassword,
-  resetPassword,
-};
+module.exports = { register, login, logout, forgotPassword, resetPassword };

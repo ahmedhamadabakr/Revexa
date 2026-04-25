@@ -23,12 +23,12 @@ try {
   serviceAccount = null;
 }
 
-if (serviceAccount) {
+if (serviceAccount && admin.apps.length === 0) {
   admin.initializeApp({
     credential: admin.credential.cert(serviceAccount),
   });
   console.log("Firebase Admin SDK initialized successfully.");
-} else {
+} else if (!serviceAccount) {
   console.warn("Warning: Firebase Admin SDK not activated due to missing settings.");
 }
 

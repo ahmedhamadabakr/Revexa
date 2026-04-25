@@ -1,10 +1,4 @@
-// - Orders
-//   - Get all orders By Status (Pagination)
-//   - Get order by id
-//   - Create order
-//   - Update order
-//   - Delete order
-
+const express = require("express");
 const {
   getAllOrders,
   getOrderById,
@@ -12,20 +6,14 @@ const {
   updateOrder,
   deleteOrder,
 } = require("../controllers/order.controller");
-
-const express = require("express");
 const mustBeLoggedIn = require("../middlewares/must-be-logged");
 
-const orederRouter = express.Router();
+const orderRouter = express.Router();
 
-orederRouter.get("/api/orders", mustBeLoggedIn, getAllOrders);
+orderRouter.get("/", mustBeLoggedIn, getAllOrders);
+orderRouter.get("/:orderId", mustBeLoggedIn, getOrderById);
+orderRouter.post("/:productId", mustBeLoggedIn, createOrder);
+orderRouter.put("/:orderId", mustBeLoggedIn, updateOrder);
+orderRouter.delete("/:orderId", mustBeLoggedIn, deleteOrder);
 
-orederRouter.get("/api/order/:orderId", mustBeLoggedIn, getOrderById);
-
-orederRouter.post("/api/order/:productId", mustBeLoggedIn, createOrder);
-
-orederRouter.put("/api/order/:orderId", mustBeLoggedIn, updateOrder);
-
-orederRouter.delete("/api/order/:orderId", mustBeLoggedIn, deleteOrder);
-
-module.exports = orederRouter;
+module.exports = orderRouter;

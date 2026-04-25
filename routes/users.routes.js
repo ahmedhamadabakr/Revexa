@@ -10,11 +10,11 @@ const mustBeLoggedIn = require("../middlewares/must-be-logged");
 
 const usersRouter = express.Router();
 
-// get all users
-usersRouter.get("/", getAllUsers);
+// get all users — admin only
+usersRouter.get("/", mustBeLoggedIn, getAllUsers);
 
 // get user by id
-usersRouter.get("/:userId", getUserById);
+usersRouter.get("/:userId", mustBeLoggedIn, getUserById);
 
 // update user
 usersRouter.put("/:userId", mustBeLoggedIn, updateUser);

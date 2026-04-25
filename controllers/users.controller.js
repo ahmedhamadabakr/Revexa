@@ -1,148 +1,115 @@
 const User = require("../models/user.model");
-const userVaildation = require("../requests/users/user.vaildation");
+const userValidation = require("../requests/users/user.vaildation");
 
 const getAllUsers = async (req, res) => {
   try {
-    const { page = 1, limit = 10 } = req.query;
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 10));
+
     const users = await User.find()
-      .skip((page - 1) * limit) //skip the first n items returned by the query where n = (page - 1) * limit
-      .limit(parseInt(limit)); //limit the number of items returned
+      .select("-password -refreshToken -passwordResetToken -passwordResetExpires")
+      .skip((page - 1) * limit)
+      .limit(limit);
 
-    if (!users) {
-      res.status(404).send("No users found");
-      return;
-    }
-
-    const totalUsers = await User.countDocuments(); //count the total number of documents in the collection
-    const totalPages = Math.ceil(totalUsers / limit); //calculate the total number of pages - ceil() rounds up to the nearest whole number
+    const totalUsers = await User.countDocuments();
+    const totalPages = Math.ceil(totalUsers / limit);
 
     res.status(200).json({
       message: "All users",
       status: "success",
-      data: users.map((user) => ({
-        //map the users array to a new array of objects with only the email, firstName, and lastName properties
-        email: user.email,
-        firstName: user.firstName,
-        lastName: user.lastName,
-      })),
+      data: users,
       pagination: {
         totalUsers,
         totalPages,
-        currentPage: parseInt(page),
-        pageSize: parseInt(limit),
+        currentPage: page,
+        pageSize: limit,
       },
     });
   } catch (error) {
-    res.status(400).send(error.message);
+    res.status(500).json({ message: error.message, data: null });
   }
 };
 
 const getUserById = async (req, res) => {
   try {
-    const id = req.params.userId;
-    userVaildation.parse({ userId: id });
+    userValidation.parse({ userId: req.params.userId });
 
-    const isUser = await User.findById(id);
-    console.log(isUser);
-    if (!isUser) {
-      res.status(404).send("User not found");
-      return;
+    const user = await User.findById(req.params.userId)
+      .select("-password -refreshToken -passwordResetToken -passwordResetExpires");
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found", data: null });
     }
 
-    res.status(200).json({
-      message: "User found",
-      status: "success",
-      data: {
-        email: isUser.email,
-        firstName: isUser.firstName,
-        lastName: isUser.lastName,
-        phone: isUser.phone,
-      },
-    });
+    res.status(200).json({ message: "User found", status: "success", data: user });
   } catch (error) {
-    res.status(400).send(error.message);
+    res.status(400).json({ message: error.message, data: null });
   }
 };
 
 const updateUser = async (req, res) => {
   try {
-    const id = req.params.userId;
-    try {
-      userVaildation.parse({ userId: id }); //validate the id
-    } catch (error) {
-      res.status(400).send("Invalid user ID");
-      return;
-    }
-    const user = await User.findById(id); //find the user by id
+    userValidation.parse({ userId: req.params.userId });
 
-    if (!user) {
-      res.status(404).send("User not found");
-      return;
+    // Users can only update their own profile; admins can update anyone
+    if (req.user.id !== req.params.userId && req.user.role !== "admin") {
+      return res.status(403).json({ message: "Access denied. You can only update your own profile.", data: null });
     }
 
-    await User.updateOne({ _id: id }, { $set: { ...req.body } }); //update the user with the new data
+    // Prevent role escalation
+    const { password, role, ...allowedUpdates } = req.body;
 
-    const userAfterUpdate = await User.findById(id);// call user after up date
-    
-    res.status(200).json({
-      message: "User updated",
-      status: "success",
-      data: {
-        email: userAfterUpdate.email,
-        firstName: userAfterUpdate.firstName,
-        lastName: userAfterUpdate.lastName,
-      },
-    });
+    const updatedUser = await User.findByIdAndUpdate(
+      req.params.userId,
+      { $set: allowedUpdates },
+      { new: true, runValidators: true }
+    ).select("-password -refreshToken -passwordResetToken -passwordResetExpires");
+
+    if (!updatedUser) {
+      return res.status(404).json({ message: "User not found", data: null });
+    }
+
+    res.status(200).json({ message: "User updated successfully", status: "success", data: updatedUser });
   } catch (error) {
-    res.status(400).send(error.message);
+    res.status(400).json({ message: error.message, data: null });
   }
 };
 
 const deleteUser = async (req, res) => {
   try {
-    const id = req.params.userId;
-    userVaildation.parse({ userId: id }); //validate the id
+    userValidation.parse({ userId: req.params.userId });
 
-    const user = await User.findById(id); //find the user by id
-    if (!user) {
-      res.status(404).send("User not found");
-      return;
+    // Users can only delete their own account; admins can delete anyone
+    if (req.user.id !== req.params.userId && req.user.role !== "admin") {
+      return res.status(403).json({ message: "Access denied. You can only delete your own account.", data: null });
     }
 
-    await User.deleteOne({ _id: id });
-    res.send("delete user");
+    const user = await User.findByIdAndDelete(req.params.userId);
+    if (!user) {
+      return res.status(404).json({ message: "User not found", data: null });
+    }
+
+    res.status(200).json({ message: "User deleted successfully", data: true });
   } catch (error) {
-    res.status(400).send(error.message);
+    res.status(400).json({ message: error.message, data: null });
   }
 };
 
 const updateFcmToken = async (req, res) => {
   try {
     const { fcmToken } = req.body;
-    const userId = req.user.id; // Taken from Middleware (mustBeLoggedIn)
-
     if (!fcmToken) {
-      return res.status(400).json({ message: "FCM Token is required" });
+      return res.status(400).json({ message: "fcmToken is required", data: null });
     }
 
-    // ضمان عدم تكرار التوكن مع مستخدم آخر
-    await User.updateMany({ fcmToken: fcmToken }, { $set: { fcmToken: null } });
+    // Clear token from any other user first
+    await User.updateMany({ fcmToken, _id: { $ne: req.user.id } }, { $set: { fcmToken: null } });
+    await User.findByIdAndUpdate(req.user.id, { fcmToken });
 
-    await User.findByIdAndUpdate(userId, { fcmToken });
-
-    res.status(200).json({
-      message: "FCM Token updated successfully",
-      status: "success",
-    });
+    res.status(200).json({ message: "FCM token updated successfully", data: true });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ message: error.message, data: null });
   }
 };
 
-module.exports = {
-  getAllUsers,
-  getUserById,
-  updateUser,
-  deleteUser,
-  updateFcmToken,
-};
+module.exports = { getAllUsers, getUserById, updateUser, deleteUser, updateFcmToken };

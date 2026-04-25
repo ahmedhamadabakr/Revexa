@@ -1,8 +1,8 @@
 const z = require("zod");
 
+// Status values must match orders.models.js enum exactly
 const orderSchema = z.object({
-  quantity: z.number().int().positive().min(1),
-  status: z.enum(['pending', 'processing', 'shipped', 'delivered', 'cancelled']).optional()
+  status: z.enum(["pending", "confirmed", "in-progress", "completed", "cancelled"]).optional(),
 });
 
 module.exports = { orderSchema };
