@@ -5,8 +5,12 @@ dotenv.config();
 
 let serviceAccount;
 try {
-  // نقوم بمحاولة قراءة المفتاح من متغيرات البيئة
-  serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+  if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+    // نقوم بمحاولة قراءة المفتاح من متغيرات البيئة
+    serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+  } else {
+    serviceAccount = null;
+  }
 } catch (error) {
   console.error("خطأ: لم يتم العثور على FIREBASE_SERVICE_ACCOUNT أو التنسيق غير صحيح.");
   serviceAccount = null;
